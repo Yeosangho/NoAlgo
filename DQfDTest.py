@@ -68,6 +68,8 @@ def step(i,f, episode):
     #print(screenpath + gameName + "/" + str(episode) + "/" + str(i) + ".png")
     #print(traj)
     #print(i)
+    #if(traj[3] == "False"): done = False
+    #else : done = True
     done = bool(int(traj[3]))
 
     action = int(traj[4])

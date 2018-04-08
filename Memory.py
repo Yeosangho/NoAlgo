@@ -86,7 +86,7 @@ class SumTree(object):
 
 class Memory(object):
 
-    epsilon = 0.001  # small amount to avoid zero priority
+    epsilon = 0.000001  # small amount to avoid zero priority
     demo_epsilon = 1.0  # 1.0  # extra
     alpha = 0.4  # [0~1] convert the importance of TD error to priority
     beta = 0.6  # importance-sampling, from initial value increasing to 1
