@@ -296,7 +296,7 @@ class DQfD:
         whole_state_bat = []
         whole_state_bat = next_state_batch + n_step_state_batch + state_batch
         whole_eval_bat = next_state_batch + n_step_state_batch
-        print(whole_state_bat.__len__())
+        #print(whole_state_bat.__len__())
         #Q_select, Q_eval = self.sess.run([self.Q_select, self.Q_eval], feed_dict={self.select_input: next_state_batch, self.eval_input: next_state_batch})
         #n_step_Q_select, n_step_Q_eval = self.sess.run([self.Q_select, self.Q_eval], feed_dict={self.select_input: n_step_state_batch, self.eval_input: n_step_state_batch})
         #temp = self.sess.run(self.Q_select, feed_dict={self.select_input: state_batch})
