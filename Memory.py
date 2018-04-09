@@ -16,7 +16,7 @@ class SumTree(object):
         self.data = np.zeros(capacity, dtype=object)  # stores transitions
         self.permanent_data = permanent_data  # numbers of data which never be replaced, for demo data protection
         assert 0 <= self.permanent_data <= self.capacity  # equal is also illegal
-        self.full = True
+        self.full = False
 
     def __len__(self):
         return self.capacity if self.full else self.data_pointer

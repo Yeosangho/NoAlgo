@@ -11,8 +11,8 @@ class Config:
 
     TRAJ_PATH = "/home/soboru963/atari_v2_release/trajectories/"
     SCREEN_PATH = '/home/soboru963/atari_v2_release/screens/'
-    #TRAJ_PATH = "/home/soboru963/atari_v1/trajectories/"
-    #SCREEN_PATH = '/home/soboru963/atari_v1/screens/'
+    #TRAJ_PATH = "/home/ubuntu/atari_v1/trajectories/"
+    #SCREEN_PATH = '/home/ubuntu/atari_v1/screens/'
     GAMMA = 0.99  # discount factor for target Q
     INITIAL_EPSILON = 1.0  # starting value of epsilon
     FINAL_EPSILON = 0.01  # final value of epsilon
@@ -30,7 +30,7 @@ class Config:
     LEARNER_DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'learner/')
     GIF_STEP = 10
     human_num = 1
-    actor_num = 1
+    actor_num = 4
     demo_buffer_size = 500 * 50
     #replay_buffer_size = demo_buffer_size * (human_num + actor_num)
     replay_buffer_size = 250000
@@ -40,12 +40,12 @@ class Config:
     episode = 300  # 300 games per iteration
     trajectory_n = 10  # for n-step TD-loss (both demo data and generated data)
 
-    START_STEP = 379000
+    START_STEP = 0
     LEARNER_TRAINING_STEP = 1500000
     LEARNER_TRAINING_PART = 1000
     ACTOR_ACTING_PART = 1000
     ACTOR_SLEEP = 0.05
-    HUMAN_SLEEP = 0.2
+    HUMAN_SLEEP = 0.05
 class DDQNConfig(Config):
     demo_mode = 'get_demo'
 
