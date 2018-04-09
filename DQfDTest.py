@@ -21,7 +21,7 @@ from PIL import Image
 import math
 import csv
 from datetime import datetime
-
+import sys
 from random import shuffle
 def process_frame(frame):
     s = scipy.misc.imresize(frame, [84, 84, 3])
@@ -203,8 +203,9 @@ class Actor(object):
             t_q = deque(maxlen=Config.trajectory_n)
 
             while done is False:
-                time.sleep(Config.ACTOR_SLEEP)
                 startTime = time.time()
+                if (self.actor.replay_memory.full()):
+                    time.sleep(Config.ACTOR_SLEEP)
                 # print(index + " running!")
                 action = self.actor.egreedy_action(state)  # e-greedy action for train
                 next_state, reward, done, _ = self.env.step(action)
@@ -225,9 +226,7 @@ class Actor(object):
                         n_step_reward += reward * Config.GAMMA ** (Config.trajectory_n - 1)
                     t_q[0].extend([n_step_reward, next_state, done, t_q.maxlen, self.learner.time_step])  # actual_n is max_len here
                     value, age, demo = self.actor.perceive(t_q[0])  # perceive when a transition is completed
-                    deleted_value = deleted_value + value
-                    deleted_age = deleted_age + age
-                    deleted_demo = deleted_demo + demo
+
                     #print(demo)
                     # print(t_q[0][3])
                     #print(self.learner.time_step)
@@ -235,6 +234,9 @@ class Actor(object):
                     if(count % Config.ACTOR_ACTING_PART == 0 and "actor0" == self.name):
                         print(self.name + "--- %s seconds ---" % (time.time() - startTime) + "/"+str(self.actor.replay_memory.tree.data_pointer))
                     if(count % Config.ACTOR_ACTING_PART == 0 and "actor0" == self.name ):
+                        deleted_value = deleted_value + value
+                        deleted_age = deleted_age + age
+                        deleted_demo = deleted_demo + demo
                         sum_value = deleted_value / Config.ACTOR_ACTING_PART
                         sum_age = deleted_age / Config.ACTOR_ACTING_PART
                         sum_demo = float(deleted_demo) / Config.ACTOR_ACTING_PART
@@ -309,7 +311,8 @@ class Human(object):
                 while (not episodeEnd):
 
                     startTime = time.time()
-                    time.sleep(Config.ACTOR_SLEEP)
+                    if (self.human.replay_memory.full()):
+                        time.sleep(Config.HUMAN_SLEEP)
                     next_state, reward, done, action, episodeEnd = step(self.i, self.f, self.episode)
                     a = self.human.sess.run(self.human.update_local_ops)
                     asum = 0
