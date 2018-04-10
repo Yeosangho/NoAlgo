@@ -363,7 +363,198 @@ class Human(object):
                 self.i, self.f = goNextEpisode(self.i, self.f, self.episode)
 
 
+class Trainer():
+    def __init__(self, name, env, agent, episodeList):
+        self.name = name
+        self.env = env
+        self.agent = agent
+        self.episodeList = episodeList
+        self.episode = self.i = self.f = None
+    def run(self):
+        train_itr = 0
+        episode_frames = []
+        episode_count = 0
+        deleted_value = 0
+        deleted_age = 0
+        deleted_demo = 0
 
+        pre_score = 0
+        pre_train_itr = 0
+        #
+        lock = threading.Lock()
+        print(self.name)
+
+        count = 0
+        scores, e, replay_full_episode = [], 0, None
+        filename = ''
+
+        random.shuffle(self.episodeList)
+        epsidoe_list_count = 0
+        self.episode = self.episodeList[epsidoe_list_count]
+        self.i, self.f = goNextEpisode(self.i, self.f, self.episode)
+        episodeEnd = False
+
+        sample_log = openLog(Config.LEARNER_DATA_PATH + 'sampleexp/', '', ['step', 'value', 'age', 'demo'])
+        replay_log = openLog(Config.LEARNER_DATA_PATH + 'replaymemory/', '', ['step', 'root_priority', 'root_ts', 'root_demo', 'alpha', 'beta'])
+        delete_log = openLog(Config.ACTOR_DATA_PATH + 'deletedexp/', '', ['step', 'train_itr', 'value', 'age', 'demo'])
+        episode_log = openLog(Config.ACTOR_DATA_PATH + 'episodescore/', '', ['episode', 'score'])
+        actor_done, actor_score, actor_n_step_reward, actor_state = False, 0, None, self.env.reset()
+        human_done, human_score, human_n_step_reward, human_state = False, 0, None, np.zeros([83, 83, 3], dtype=np.float32)
+        episodeEnd = False
+        t_q_actor = deque(maxlen=Config.trajectory_n)
+        t_q_human = deque(maxlen=Config.trajectory_n)
+        episode_count = 0
+        train_itr = train_itr + 1
+
+        while (train_itr < Config.LEARNER_TRAINING_STEP):
+
+            human_state = process_frame(human_state)
+            actor_state = process_frame(actor_state)
+
+            while actor_done is False and episodeEnd is False:
+                startTime = time.time()
+                if(train_itr % Config.ACTOR_HUMAN_COUNT != 0 ):
+                        action = self.agent.egreedy_action(actor_state)  # e-greedy action for train
+                        next_state, reward, actor_done, _ = self.env.step(action)
+                        # env.render()
+                        episode_frames.append(next_state)
+                        next_state = process_frame(next_state)
+                        # print(next_state)
+                        actor_score += reward
+                        reward = sign(reward) * math.log(1 + abs(reward)) if not actor_done else sign(-100) * math.log(1 + abs(-100))
+                        reward_to_sub = 0. if len(t_q_actor) < t_q_actor.maxlen else t_q_actor[0][2]  # record the earliest reward for the sub
+                        t_q_actor.append([actor_state, action, reward, next_state, actor_done, 0.0])
+
+                        if len(t_q_actor) == t_q_actor.maxlen:
+                            if actor_n_step_reward is None:  # only compute once when t_q first filled
+                                actor_n_step_reward = sum([t[2] * Config.GAMMA ** i for i, t in enumerate(t_q_actor)])
+                            else:
+                                actor_n_step_reward = (actor_n_step_reward - reward_to_sub) / Config.GAMMA
+                                actor_n_step_reward += reward * Config.GAMMA ** (Config.trajectory_n - 1)
+                            t_q_actor[0].extend([actor_n_step_reward, next_state, actor_done, t_q_actor.maxlen, self.agent.time_step])  # actual_n is max_len here
+                            self.agent.perceive(t_q_actor[0], self.agent.time_step)  # perceive when a transition is completed
+                            # print(demo)
+                            # print(t_q[0][3])
+                            # print(self.learner.time_step)
+
+                            actor_state = next_state
+
+                if (train_itr % Config.ACTOR_HUMAN_COUNT == 0):
+                    startTime = time.time()
+                    next_state, reward, human_done, action, episodeEnd = step(self.i, self.f, self.episode)
+                    self.i = self.i + 1
+                    if (episodeEnd != True):
+                        human_score += reward
+                        reward = sign(reward) * math.log(1 + abs(reward)) if not human_done else sign(-100) * math.log(1 + abs(-100))
+                        reward_to_sub = 0. if len(t_q_human) < t_q_human.maxlen else t_q_human[0][2]  # record the earliest reward for the sub
+                        t_q_human.append([human_state, action, reward, next_state, human_done, 1.0])
+                        # print(next_state)
+                        if len(t_q_human) == t_q_human.maxlen:
+                            if human_n_step_reward is None:  # only compute once when t_q first filled
+                                human_n_step_reward = sum([t[2] * Config.GAMMA ** i for i, t in enumerate(t_q_human)])
+                            else:
+                                human_n_step_reward = (human_n_step_reward - reward_to_sub) / Config.GAMMA
+                                human_n_step_reward += reward * Config.GAMMA ** (Config.trajectory_n - 1)
+
+                            t_q_human[0].extend([human_n_step_reward, next_state, human_done, t_q_human.maxlen, self.agent.time_step])  # actual_n is max_len here
+                            self.agent.perceive(t_q_human[0], self.agent.time_step)  # perceive when a transition is completed
+                        human_state = next_state
+                train_itr = train_itr + 1
+                if self.agent.replay_memory.full():
+                    self.agent.train_Q_network(update=False)  # train along with generation
+                    if (train_itr % Config.LEARNER_TRAINING_PART == 0):
+                        self.agent.save_model()
+                        sample_demo = float(self.agent.demo_num) / (Config.LEARNER_TRAINING_PART * Config.BATCH_SIZE)
+                        sample_value = math.pow(
+                            self.agent.sum_abs_error / (Config.LEARNER_TRAINING_PART * Config.BATCH_SIZE), 0.4)
+                        sample_age = self.agent.sum_age / (Config.LEARNER_TRAINING_PART * Config.BATCH_SIZE)
+                        print("learner_sample")
+                        print(sample_value)
+                        print(sample_age)
+                        print(sample_demo)
+
+                        self.agent.sum_abs_error = 0
+                        self.agent.demo_num = 0
+                        self.agent.sum_age = 0
+                        print("replay_memory")
+                        print(self.agent.replay_memory.tree.total_p)
+                        writeLog(Config.LEARNER_DATA_PATH + 'sampleexp/', sample_log,
+                                 [str(train_itr), str(sample_value), str(sample_age), str(sample_demo)])
+                        writeLog(Config.LEARNER_DATA_PATH + 'replaymemory/', replay_log,
+                                 [str(train_itr),
+                                  str(self.agent.replay_memory.tree.total_p)])
+                    replay_full_episode = replay_full_episode or e
+                if train_itr % Config().UPDATE_TARGET_NET == 0:
+                    # print("actor_update_target"+str(train_itr))
+                    self.agent.sess.run(self.agent.update_target_net)
+                if(train_itr % 100 == 0):
+                     print("process time : " + str(time.time() -startTime) + "/"+str(self.agent.replay_memory.tree.data_pointer))
+                if (train_itr % Config.ACTOR_ACTING_PART == 0):
+                    sum_value = self.agent.replay_memory.tree.avg_val / Config.ACTOR_ACTING_PART
+                    sum_age = self.agent.replay_memory.tree.avg_time / Config.ACTOR_ACTING_PART
+                    sum_demo = self.agent.replay_memory.tree.avg_demo / Config.ACTOR_ACTING_PART
+                    print("actor_deleted")
+                    print(sum_value)
+                    print(sum_age)
+                    print(sum_demo)
+                    writeLog(Config.ACTOR_DATA_PATH + 'deletedexp/', delete_log,
+                             [str(count), str(train_itr), str(sum_value), str(sum_age), str(sum_demo)])
+                    self.agent.replay_memory.tree.avg_val = 0
+                    self.agent.replay_memory.tree.avg_time = 0
+                    self.agent.replay_memory.tree.avg_demo = 0
+            if actor_done:
+                # handle transitions left in t_q
+
+                t_q_actor.popleft()  # first transition's n-step is already set
+                transitions = set_n_step(t_q_actor, Config.trajectory_n, self.agent.time_step)
+
+                for t in transitions:
+                    self.agent.perceive(t, self.agent.time_step)
+
+                    # scores.append(score)
+                if replay_full_episode is not None:
+                    print("episode: {}  trained-episode: {}  score: {}  memory length: {}  epsilon: {}"
+                          .format(e, e - replay_full_episode, actor_score, len(self.agent.replay_memory), self.agent.epsilon))
+                    writeLog(Config.ACTOR_DATA_PATH + 'episodescore/', episode_log,
+                                 [str(episode_count), str(actor_score)])
+
+                # 주기적으로 에피소드의 gif 를 저장하고, 모델 파라미터와 요약 통계량을 저장한다.
+                if episode_count % Config.GIF_STEP == 0 and episode_count != 0 and self.name == 'actor0':
+                    time_per_step = 0.01
+                    images = np.array(episode_frames)
+                    make_gif(images, './frames/dqfd_image' + str(episode_count) + '.gif',
+                             duration=len(images) * time_per_step, true_image=True, salience=False)
+                actor_done, actor_score, actor_n_step_reward, actor_state = False, 0, None, self.env.reset()
+                t_q_actor = deque(maxlen=Config.trajectory_n)
+                episode_count = episode_count + 1
+                episode_frames = []
+                pre_score = actor_score
+            if (episodeEnd):
+                # handle transitions left in t_q
+
+                print("human : episode end")
+                t_q_human.popleft()  # first transition's n-step is already set
+                transitions = set_n_step(t_q_human, Config.trajectory_n, self.agent.time_step)
+                for t in transitions:
+                    self.agent.perceive(t, self.agent.time_step)
+                if self.agent.replay_memory.full():
+                    if train_itr % Config().UPDATE_TARGET_NET == 0:
+                        #print("human_update_target")
+                        self.agent.sess.run(self.agent.update_target_net)
+                epsidoe_list_count += 1
+                if(epsidoe_list_count == self.episodeList.__len__()):
+                    random.shuffle(self.episodeList)
+                    epsidoe_list_count = 0
+                    self.episode = self.episodeList[epsidoe_list_count]
+                else :
+                    self.episode = self.episodeList[epsidoe_list_count]
+                self.i, self.f = goNextEpisode(self.i, self.f, self.episode)
+                human_done, human_score, human_n_step_reward, human_state = False, 0, None, np.zeros([83, 83, 3], dtype=np.float32)
+                t_q_human = deque(maxlen=Config.trajectory_n)
+                episodeEnd = False
+
+            e += 1
+        print("actor end")
 
 
 
@@ -408,50 +599,54 @@ if __name__ == '__main__':
     screenpath = Config.SCREEN_PATH
     trajpath = Config.TRAJ_PATH
 
-    threads = []
+    agent = DQfD('learner', env, DQfDConfig(), session, replayMemory)
+    env = gym.make(Config.ENV_NAME)
+    trainer = Trainer('leanner', env, agent,episodeList)
+    trainer.run()
+    #threads = []
     #agent = DQfD('learner', env, DQfDConfig(), session, replayMemory)
     ##env = gym.make(Config.ENV_NAME)
     #local = DQfD('actor0', env, DQfDConfig(), session, replayMemory)
     #actor = Actor('actor0' + 0, env, agent, local)
     #actor.run()
-    with tf.device('/gpu:0'):
-        agent = DQfD('learner', env, DQfDConfig(), session, replayMemory)
-        learner = Learner('learner',  agent)
-        #learner.run()
-        #print(agent.getSelectNet())
-        learn = lambda: learner.run()
-        t = threading.Thread(target=learn)
-        t.start()
-        threads.append(t)
-    t = act = None
-
-    actors = []
-    with tf.device('/cpu:0'):
-        for i in range(num_threads):
-            env = gym.make(Config.ENV_NAME)
-            local = DQfD('actor' + str(i), env, DQfDConfig(), session, replayMemory)
-            actor = Actor('actor' + str(i), env, agent, local)
-            actors.append(actor)
-        for j in range(num_threads):
-            act = lambda: actors[j].run()
-            t = threading.Thread(target= act)
-            t.start()
-            threads.append(t)
-    humans = []
-    with tf.device('/cpu:0'):
-        for i in range(num_humanThread):
-            env = gym.make(Config.ENV_NAME)
-            local = DQfD('human'+str(i), env, DQfDConfig(), session, replayMemory)
-            human = Human('human'+str(i), agent, local, episodeList)
-            humans.append(human)
-        for j in range(num_humanThread):
-            teach = lambda: humans[j].run()
-            t = threading.Thread(target=teach)
-            t.start()
-            threads.append(t)
-    coord.join(threads)
-    #scores = run_DQfD(0, env, agent)
-
+    #with tf.device('/gpu:0'):
+    #    agent = DQfD('learner', env, DQfDConfig(), session, replayMemory)
+    #    learner = Learner('learner',  agent)
+    #    #learner.run()
+    #    #print(agent.getSelectNet())
+    #    learn = lambda: learner.run()
+    #    t = threading.Thread(target=learn)
+    #    t.start()
+    #    threads.append(t)
+    #t = act = None
+    #
+    #actors = []
+    #with tf.device('/cpu:0'):
+    #    for i in range(num_threads):
+    #        env = gym.make(Config.ENV_NAME)
+    #        local = DQfD('actor' + str(i), env, DQfDConfig(), session, replayMemory)
+    #        actor = Actor('actor' + str(i), env, agent, local)
+    #        actors.append(actor)
+    #    for j in range(num_threads):
+    #        act = lambda: actors[j].run()
+    #        t = threading.Thread(target= act)
+    #        t.start()
+    #        threads.append(t)
+    #humans = []
+    #with tf.device('/cpu:0'):
+    #    for i in range(num_humanThread):
+    #        env = gym.make(Config.ENV_NAME)
+    #        local = DQfD('human'+str(i), env, DQfDConfig(), session, replayMemory)
+    #        human = Human('human'+str(i), agent, local, episodeList)
+    #        humans.append(human)
+    #    for j in range(num_humanThread):
+    #        teach = lambda: humans[j].run()
+    #        t = threading.Thread(target=teach)
+    #        t.start()
+    #        threads.append(t)
+    #coord.join(threads)
+    ##scores = run_DQfD(0, env, agent)
+    #
 
     #dqfd_sum_scores = np.zeros(Config.episode)
     #for i in range(Config.iteration):

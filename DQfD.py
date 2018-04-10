@@ -224,7 +224,7 @@ class DQfD:
             self.saver.restore(self.sess, self.config.MODEL_PATH+ "-"+str(self.time_step+self.config.START_STEP))
             print("Model restored.")
 
-    def perceive(self, transition):
+    def perceive(self, transition, current_ts):
         state_batch = np.expand_dims(transition[0], axis=0)
         action_batch = np.expand_dims(transition[1], axis=0)
         reward_batch = np.expand_dims(transition[2], axis=0)
@@ -247,13 +247,12 @@ class DQfD:
         #print(abs_errors)
         #print(abs_errors.shape)
 
-        value, age, demo = self.replay_memory.store(np.array(transition), abs_errors, demo_data[0])
+        self.replay_memory.store(np.array(transition), abs_errors, demo_data[0])
         #if (self.name == 'actor0'):
         #   print(demo)
         # epsilon->FINAL_EPSILON(min_epsilon)
         if self.replay_memory.full():
             self.epsilon = max(self.config.FINAL_EPSILON, self.epsilon * self.config.EPSILIN_DECAY)
-        return value, age, demo
     def train_Q_network(self, pre_train=False, update=True):
         """
         :param pre_train: True means should sample from demo_buffer instead of replay_buffer

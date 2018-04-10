@@ -46,6 +46,7 @@ class Config:
     ACTOR_ACTING_PART = 1000
     ACTOR_SLEEP = 0.05
     HUMAN_SLEEP = 0.05
+    ACTOR_HUMAN_COUNT = 4
 class DDQNConfig(Config):
     demo_mode = 'get_demo'
 

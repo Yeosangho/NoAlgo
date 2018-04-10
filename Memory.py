@@ -17,6 +17,9 @@ class SumTree(object):
         self.permanent_data = permanent_data  # numbers of data which never be replaced, for demo data protection
         assert 0 <= self.permanent_data <= self.capacity  # equal is also illegal
         self.full = False
+        self.avg_val = 0
+        self.avg_time = 0
+        self.avg_demo = 0
 
     def __len__(self):
         return self.capacity if self.full else self.data_pointer
@@ -36,7 +39,10 @@ class SumTree(object):
         if self.data_pointer >= self.capacity:
             self.full = True
             self.data_pointer = self.data_pointer % self.capacity + self.permanent_data  # make sure demo data permanent
-        return value, age, demo
+        self.avg_val += value
+        self.avg_demo += demo
+        self.avg_time += age
+
     def update(self, tree_idx, p):
         deletedValue = self.tree[tree_idx]
         change = p - self.tree[tree_idx]
@@ -119,8 +125,7 @@ class Memory(object):
         clipped_errors = np.minimum(abs_errors, self.abs_err_upper)
         ps = np.power(clipped_errors, self.alpha)
         #print(ps)
-        value, age, demo = self.tree.add(ps[0], transition)  # set the max_p for new transition
-        return value, age, demo
+        self.tree.add(ps[0], transition)  # set the max_p for new transition
     def sample(self, n):
         assert self.full()
         b_idx = np.empty((n,), dtype=np.int32)
