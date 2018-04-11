@@ -394,7 +394,7 @@ class Trainer():
         self.i, self.f = goNextEpisode(self.i, self.f, self.episode)
         episodeEnd = False
 
-        sample_log = openLog(Config.LEARNER_DATA_PATH + 'sampleexp/', '', ['step', 'value', 'age', 'demo'])
+        sample_log = openLog(Config.LEARNER_DATA_PATH + 'sampleexp/', '', ['step', 'value', 'age', 'demo', 'qvalue'])
         replay_log = openLog(Config.LEARNER_DATA_PATH + 'replaymemory/', '', ['step', 'root_priority', 'root_ts', 'root_demo', 'alpha', 'beta'])
         delete_log = openLog(Config.ACTOR_DATA_PATH + 'deletedexp/', '', ['step', 'train_itr', 'value', 'age', 'demo'])
         episode_log = openLog(Config.ACTOR_DATA_PATH + 'episodescore/', '', ['episode', 'score'])
@@ -468,18 +468,26 @@ class Trainer():
                         sample_value = math.pow(
                             self.agent.sum_abs_error / (Config.LEARNER_TRAINING_PART * Config.BATCH_SIZE), 0.4)
                         sample_age = self.agent.sum_age / (Config.LEARNER_TRAINING_PART * Config.BATCH_SIZE)
+                        sample_q = self.agent.qvalue / (Config.LEARNER_TRAINING_PART * Config.BATCH_SIZE)
                         print("learner_sample")
                         print(sample_value)
                         print(sample_age)
                         print(sample_demo)
+                        print(sample_q)
 
+                        sum_sample_q = 0
+                        for i in range(6):
+                            sum_sample_q += sample_q[i]
+                        print(sum_sample_q)
                         self.agent.sum_abs_error = 0
                         self.agent.demo_num = 0
                         self.agent.sum_age = 0
+                        self.agent.qvalue = 0
                         print("replay_memory")
                         print(self.agent.replay_memory.tree.total_p)
                         writeLog(Config.LEARNER_DATA_PATH + 'sampleexp/', sample_log,
-                                 [str(train_itr), str(sample_value), str(sample_age), str(sample_demo)])
+                                 [str(train_itr), str(sample_value), str(sample_age), str(sample_demo),
+                                  str(sum_sample_q)])
                         writeLog(Config.LEARNER_DATA_PATH + 'replaymemory/', replay_log,
                                  [str(train_itr),
                                   str(self.agent.replay_memory.tree.total_p)])

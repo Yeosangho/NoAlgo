@@ -79,7 +79,7 @@ class DQfD:
         self.demo_num = 0
         self.sum_abs_error = 0
         self.sum_age = 0
-
+        self.qvalue = [0.0] * self.action_dim
         self.oldsum = 0
     def add_demo_to_memory(self, demo_transitions):
         # add demo data to both demo_memory & replay_memory
@@ -323,6 +323,7 @@ class DQfD:
 
             if(demo_data[i] == 1.0):
                 self.demo_num = self.demo_num + 1
+            self.qvalue += Q_select[i]
             self.sum_age = self.sum_age + time_steps[i]
         _, loss, abs_errors = self.sess.run([self.optimize, self.loss, self.abs_errors],
                                       feed_dict={self.y_input: y_batch,

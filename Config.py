@@ -33,7 +33,7 @@ class Config:
     actor_num = 4
     demo_buffer_size = 500 * 50
     #replay_buffer_size = demo_buffer_size * (human_num + actor_num)
-    replay_buffer_size = 250000
+    replay_buffer_size = 100000
     #replay_buffer_size = 100
 
     iteration = 5
